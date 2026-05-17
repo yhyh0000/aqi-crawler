@@ -2,8 +2,11 @@ name: AQI Crawler
 
 on:
   schedule:
-    - cron: '0 */2 * * *'  # every 2 hours
-  workflow_dispatch:  # manual trigger
+    - cron: '0 */2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   crawl:
@@ -17,3 +20,10 @@ jobs:
         env:
           WAQI_TOKEN: ${{ secrets.WAQI_TOKEN }}
         run: python aqi_crawler.py
+      - name: Commit updates
+        run: |
+          git config user.name "AQI Bot"
+          git config user.email "aqi-bot@github.com"
+          git add README.md data/
+          git diff --staged --quiet || git commit -m "Update AQI $(date +%Y-%m-%d_%H:%M)"
+          git push
