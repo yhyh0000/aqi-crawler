@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-"""全国40城市AQI爬虫 - 抓取、排序、更新README、存历史"""
-import json, urllib.request, ssl, base64, os, datetime, time
-
+"""全国40城市AQI爬虫"""
+import json, urllib.request, ssl, os, datetime
 ssl._create_default_https_context = ssl._create_unverified_context
 TOKEN = os.environ["WAQI_TOKEN"]
 
@@ -18,69 +17,66 @@ CITIES = {
     "哈尔滨":"harbin","海口":"haikou","宁波":"ningbo","广州":"guangzhou"
 }
 
-def fetch_all():
-    results = []
-    for cn, en in CITIES.items():
-        try:
-            url = f"https://api.waqi.info/feed/{en}/?token={TOKEN}"
-            resp = json.loads(urllib.request.urlopen(urllib.request.Request(
-                url, headers={"User-Agent":"AQI/2.0"}), timeout=10).read())
-            if resp.get("status")=="ok":
-                d,iaqi = resp["data"],resp["data"].get("iaqi",{})
-                aqi = d.get("aqi")
-                results.append({"city":cn,"aqi":aqi if aqi else "停更",
-                    "aqi_num":int(aqi) if aqi and str(aqi).isdigit() else 0,
-                    "pm25":iaqi.get("pm25",{}).get("v","-"),"pm10":iaqi.get("pm10",{}).get("v","-"),
-                    "o3":iaqi.get("o3",{}).get("v","-"),"temp":iaqi.get("t",{}).get("v","-"),
-                    "humidity":iaqi.get("h",{}).get("v","-"),"wind":iaqi.get("w",{}).get("v","-")})
-            else:
-                results.append({"city":cn,"aqi":"停更","aqi_num":0,"pm25":"-","pm10":"-","o3":"-","temp":"-","humidity":"-","wind":"-"})
-        except:
-            results.append({"city":cn,"aqi":"停更","aqi_num":0,"pm25":"-","pm10":"-","o3":"-","temp":"-","humidity":"-","wind":"-"})
-    results.sort(key=lambda x:x["aqi_num"],reverse=True)
-    return results
+def parse_aqi(val):
+    if val is None: return ("停更",0)
+    if isinstance(val,(int,float)): return (int(val),int(val))
+    s = str(val).strip()
+    if s in ("","-","N/A","null"): return ("停更",0)
+    try: return (int(s),int(s))
+    except: return ("停更",0)
 
 def emoji(v):
     if v=="停更" or v==0: return "⚪"
-    v=int(v)
     if v<=50: return "🟢"
     if v<=100: return "🟡"
     if v<=150: return "🟠"
     return "🔴"
 
-def build_readme(results):
-    bjt = (datetime.datetime.utcnow()+datetime.timedelta(hours=8)).strftime("%Y-%m-%d %H:%M")
-    table = "| 城市 | AQI | PM2.5 | PM10 | O₃ | 🌡温度 | 💧湿度 | 🌬风力 |\n|------|-----|-------|------|-----|--------|--------|--------|\n"
-    for r in results:
-        c,e = r["city"],emoji(r["aqi"])
-        t = f"{r['temp']}°C" if r['temp']!='-' else '-°C'
-        h = f"{r['humidity']}%" if r['humidity']!='-' else '-%'
-        w = str(r['wind']) if r['wind']!='-' else '-'
-        table += f"| {c} | {r['aqi']} {e} | {r['pm25']} | {r['pm10']} | {r['o3']} | {t} | {h} | {w} |\n"
-    return f"""# 🌏 全国城市空气质量监测
+results = []
+for cn, en in CITIES.items():
+    try:
+        url = f"https://api.waqi.info/feed/{en}/?token={TOKEN}"
+        resp = json.loads(urllib.request.urlopen(urllib.request.Request(
+            url, headers={"User-Agent":"AQI/2.0"}), timeout=10).read())
+        if resp.get("status")=="ok":
+            d, iaqi = resp["data"], resp["data"].get("iaqi",{})
+            aqi_str, aqi_num = parse_aqi(d.get("aqi"))
+            results.append({"city":cn,"aqi":aqi_str,"aqi_num":aqi_num,
+                "pm25":iaqi.get("pm25",{}).get("v","-"),"pm10":iaqi.get("pm10",{}).get("v","-"),
+                "o3":iaqi.get("o3",{}).get("v","-"),"temp":iaqi.get("t",{}).get("v","-"),
+                "humidity":iaqi.get("h",{}).get("v","-"),"wind":iaqi.get("w",{}).get("v","-")})
+        else:
+            results.append({"city":cn,"aqi":"停更","aqi_num":0,"pm25":"-","pm10":"-","o3":"-","temp":"-","humidity":"-","wind":"-"})
+    except:
+        results.append({"city":cn,"aqi":"停更","aqi_num":0,"pm25":"-","pm10":"-","o3":"-","temp":"-","humidity":"-","wind":"-"})
+
+results.sort(key=lambda x:x["aqi_num"], reverse=True)
+
+bjt = (datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y-%m-%d %H:%M"))
+table = "| 城市 | AQI | PM2.5 | PM10 | O\u2083 | \U0001f321温度 | \U0001f4a7湿度 | \U0001f32c风力 |\n|------|-----|-------|------|-----|--------|--------|--------|\n"
+for r in results:
+    e = emoji(r["aqi_num"])
+    t = f"{r['temp']}°C" if r['temp']!='-' else '-°C'
+    h = f"{r['humidity']}%" if r['humidity']!='-' else '-%'
+    w = str(r['wind']) if r['wind']!='-' else '-'
+    table += f"| {r['city']} | {r['aqi']} {e} | {r['pm25']} | {r['pm10']} | {r['o3']} | {t} | {h} | {w} |\n"
+
+readme = f"""# \U0001f30f 全国城市空气质量监测
 
 > 数据来源: [WAQI](https://waqi.info/) · 每2小时自动更新 · 北京时间
 
-📅 更新时间: **{bjt}** (北京时间)
+\U0001f4c5 更新时间: **{bjt}** (北京时间)
 
 {table}
 ---
-📊 图例: 🟢 优(0-50) 🟡 良(51-100) 🟠 轻度(101-150) 🔴 中度+(>150) ⚪ 停更
-""", bjt
+\U0001f4ca 图例: \U0001f7e2 优(0-50) \U0001f7e1 良(51-100) \U0001f7e0 轻度(101-150) \U0001f534 中度+(>150) \u26aa 停更
+"""
 
-if __name__ == "__main__":
-    results = fetch_all()
-    readme, bjt = build_readme(results)
-    
-    # Save to files
-    with open("README.md","w") as f: f.write(readme)
-    
-    today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
-    os.makedirs("data",exist_ok=True)
-    save_data = {"update_time":bjt,"data":[{k:v for k,v in r.items() if k!='aqi_num'} for r in results]}
-    with open(f"data/{today}.json","w") as f: json.dump(save_data,f,ensure_ascii=False,indent=2)
-    
-    # Print summary
-    for r in results[:5]:
-        print(f"{r['city']} AQI:{r['aqi']} PM2.5:{r['pm25']}")
-    print(f"\nDone. {len(results)} cities. Data saved to data/{today}.json")
+with open("README.md","w",encoding="utf-8") as f: f.write(readme)
+
+os.makedirs("data",exist_ok=True)
+today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+save_data = {"update_time":bjt,"data":[{k:v for k,v in r.items() if k!='aqi_num'} for r in results]}
+with open(f"data/{today}.json","w",encoding="utf-8") as f: json.dump(save_data,f,ensure_ascii=False,indent=2)
+
+print(f"Done. {len(results)} cities. Top: {results[0]['city']} AQI {results[0]['aqi']}")
