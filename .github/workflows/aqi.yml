@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -21,9 +23,15 @@ jobs:
           WAQI_TOKEN: ${{ secrets.WAQI_TOKEN }}
         run: python aqi_crawler.py
       - name: Commit updates
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "AQI Bot"
           git config user.email "aqi-bot@github.com"
-          git add README.md data/
-          git diff --staged --quiet || git commit -m "Update AQI $(date +%Y-%m-%d_%H:%M)"
-          git push
+          git add README.md data/ 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "No changes"
+          else
+            git commit -m "Update AQI $(TZ='Asia/Shanghai' date +%Y-%m-%d_%H:%M)"
+            git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git HEAD:main
+          fi
