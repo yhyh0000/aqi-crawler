@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
-"""全国40城市AQI爬虫"""
-import json, urllib.request, ssl, os, datetime
+"""全国40城市AQI爬虫 - 优质城市优先排序版"""
+import json
+import urllib.request
+import ssl
+import os
+import datetime
+
 ssl._create_default_https_context = ssl._create_unverified_context
 TOKEN = os.environ["WAQI_TOKEN"]
 
@@ -50,7 +55,8 @@ for cn, en in CITIES.items():
     except:
         results.append({"city":cn,"aqi":"停更","aqi_num":0,"pm25":"-","pm10":"-","o3":"-","temp":"-","humidity":"-","wind":"-"})
 
-results.sort(key=lambda x:x["aqi_num"], reverse=True)
+# 自定义排序：优质（aqi_num小）在前，停更（aqi_num==0）在后
+results.sort(key=lambda x: (x["aqi_num"] == 0, x["aqi_num"]))
 
 bjt = (datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y-%m-%d %H:%M"))
 table = "| 城市 | AQI | PM2.5 | PM10 | O\u2083 | \U0001f321温度 | \U0001f4a7湿度 | \U0001f32c风力 |\n|------|-----|-------|------|-----|--------|--------|--------|\n"
@@ -72,11 +78,13 @@ readme = f"""# \U0001f30f 全国城市空气质量监测
 \U0001f4ca 图例: \U0001f7e2 优(0-50) \U0001f7e1 良(51-100) \U0001f7e0 轻度(101-150) \U0001f534 中度+(>150) \u26aa 停更
 """
 
-with open("README.md","w",encoding="utf-8") as f: f.write(readme)
+with open("README.md","w",encoding="utf-8") as f:
+    f.write(readme)
 
 os.makedirs("data",exist_ok=True)
 today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
 save_data = {"update_time":bjt,"data":[{k:v for k,v in r.items() if k!='aqi_num'} for r in results]}
-with open(f"data/{today}.json","w",encoding="utf-8") as f: json.dump(save_data,f,ensure_ascii=False,indent=2)
+with open(f"data/{today}.json","w",encoding="utf-8") as f:
+    json.dump(save_data,f,ensure_ascii=False,indent=2)
 
 print(f"Done. {len(results)} cities. Top: {results[0]['city']} AQI {results[0]['aqi']}")
